@@ -1,0 +1,121 @@
+/* General body styling */
+body {
+    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+    background-color: #f8fafc;
+    color: #222;
+    line-height: 1.7;
+}
+
+/* Title and author */
+h1.title {
+    color: #0077b6;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+.author, .date {
+    color: #555;
+    font-size: 1.1em;
+}
+
+/* Section headings */
+h2, h3, h4 {
+    color: #023e8a;
+    font-weight: 600;
+    margin-top: 2em;
+}
+
+/* Table of contents sidebar */
+#TOC, .toc {
+    background: #e0f2fe;
+    border-radius: 8px;
+    padding: 1em;
+    font-size: 1em;
+}
+#TOC a, .toc a {
+    color: #0077b6;
+}
+#TOC a:hover, .toc a:hover {
+    color: #023e8a;
+    text-decoration: underline;
+}
+
+/* Code blocks */
+pre, code {
+    background: #f1f3f6 !important;
+    color: #222 !important;
+    border-radius: 6px;
+    font-size: 1em;
+}
+pre {
+    border-left: 4px solid #0077b6;
+    padding: 1em;
+    margin-bottom: 1.5em;
+}
+
+/* Inline code */
+code {
+    color: #d63384;
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Plots and figures */
+.figure, .cell-output-display {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 1em;
+    margin: 1.5em 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+}
+
+/* Data tables */
+table {
+    background: #fff;
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 2em;
+}
+th, td {
+    border: 1px solid #e0e0e0;
+    padding: 0.6em 1em;
+}
+th {
+    background: #caf0f8;
+    color: #023e8a;
+    font-weight: 600;
+}
+
+/* Highlighted insights or notes */
+.markdown-alert, .insight, .note, .callout {
+    background: #e0f7fa;
+    border-left: 5px solid #00b4d8;
+    padding: 1em 1.5em;
+    margin: 1.5em 0;
+    border-radius: 6px;
+    font-size: 1.05em;
+}
+
+/* Custom link styles */
+a {
+    color: #0077b6;
+    text-decoration: none;
+}
+a:hover {
+    color: #d63384;
+    text-decoration: underline;
+}
+
+/* Responsive tweaks */
+@media (max-width: 900px) {
+    body {
+        font-size: 1em;
+    }
+    .figure, .cell-output-display {
+        padding: 0.5em;
+    }
+    table, th, td {
+        font-size: 0.95em;
+    }
+}
