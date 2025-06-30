@@ -1,0 +1,1341 @@
+---
+title: "Myntra Sales Analysis"
+format:
+  html:
+    css: styles.css
+    toc: true
+---
+
+
+
+# 1) **Problem Statement:**
+
+- Myntra is a leading Indian fashion e-commerce company known for its wide range of clothing,
+accessories, and lifestyle products.
+-  While Myntra is recognized primarily for fashion, this dataset
+relates to the company&#39;s online retail operations for Myntra Gifts Ltd., a UK-based division
+specializing in unique all-occasion giftware.
+- This dataset spans transactions from December 1, 2009,
+to December 9, 2011, and includes detailed records of sales made through Myntra Gifts Ltd.’s non-
+store online platform.
+- The dataset provides a thorough snapshot of the company&#39;s international
+online retail activities during this period.
+- The primary purpose of analyzing this dataset is to extract valuable
+  insights to enhance Myntra Gifts Ltd.'s business strategies.
+Specific goals include:
+  1. Identifying Purchasing Trends
+  2. Evaluating Product Performance
+  3. Understanding Customer Behavior
+  4. Optimizing Pricing Strategies
+
+## Importing Neccessary Libraries
+
+```{python}
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns 
+import cufflinks as cf
+cf.go_offline()
+import warnings
+import sqlite3
+from scipy.stats import ttest_ind
+import scipy.stats as stats
+sns.set(style="whitegrid")
+warnings.filterwarnings('ignore')
+```
+
+# **Loading the Dataset**
+
+```{python}
+# creating database connection
+conn=sqlite3.connect('myntra_sales.db')
+
+# fethcing vendor summary data
+df=pd.read_sql_query("select * from myntra_sales_summary",conn)
+```
+
+```{python}
+# dataset Overview
+import itables
+#| output: False
+itables.show(df.head(100))
+```
+
+### Dataset  first View
+
+```{python}
+df.shape
+```
+
+### Dataset Information
+
+```{python}
+import itables
+# dataset Information
+#| output: False
+itables.show(df.info(50))
+```
+
+### Duplicated Values
+
+```{python}
+# duplicate values
+len(df[df.duplicated()])
+```
+
+#### Missing Values/Null Values
+
+```{python}
+# missing values/null values count
+print(df.isnull().sum())
+```
+
+```{python}
+# visualizing the missin  valuesArithmeticError
+# Checking Null values by plotting Heatmap
+sns.heatmap(df.isnull(),cbar=False)
+```
+
+### What did you know about your dataset?
+
+Data Overview:
+-  While Myntra is recognized primarily for fashion, this dataset relates to the company& #39;s online retail operations for Myntra Gifts Ltd., a UK-based division
+specializing in unique all-occasion giftware.
+- This dataset spans transactions from December 1, 2009,to December 9, 2011, and includes detailed records of sales made through Myntra Gifts Ltd.’s non-store online platform.
+- The dataset provides a thorough snapshot of the company& #39;s international
+online retail activities during this period.
+- The primary purpose of analyzing this dataset is to extract valuable
+  insights to enhance Myntra Gifts Ltd.'s business strategies.
+
+Specific goals include:
+  1. Identifying Purchasing Trends
+  2. Evaluating Product Performance
+  3. Understanding Customer Behavior
+  4. Optimizing Pricing Strategies
+
+The dataset consists of **328609** records and **20** columns of a Myntra , each representing different aspects of the transactions.
+
+# **2. Uderstanding The variable**
+
+```{python}
+# datasets columns
+df.columns
+```
+
+```{python}
+# datasets Describe
+df.describe(include='all').T
+```
+
+### Variables Description
+
+- InvoiceNo: Unique identifier for each invoice.
+- StockCode: Code representing the product sold.
+- Description: Description of the product.
+- Quantity: Number of items sold.
+- InvoiceDate: Date and time of the transaction.
+- UnitPrice: Price per unit of the product.
+- CustomerID: Unique identifier for the customer.
+- Country: Country of the customer.
+- Total_Quantity: Total quantity of items sold in the invoice.
+- Total_Revenue: Total revenue generated from the invoice.
+- Year: Year of the transaction.
+- Month: Month of the transaction.
+- Quarter: Quarter of the year when the transaction occurred.
+- Weekend: Indicator if the transaction occurred on a weekend.
+- InvoiceHour: Hour of the day when the transaction took place.
+- DayOfWeek: Day of the week when the transaction occurred.
+- IsWeekend: Boolean indicating if the transaction was on a weekend.
+- PartOfDay: Time of day (e.g., Morning, Afternoon, Evening).
+- Avg_Price_Per_Item: Average price per item sold.
+- Items_Per_Invoice: Average number of items per invoice.
+
+
+### Check Unique Values for each variable.
+
+```{python}
+# check unique values for each column
+for i in df.columns.tolist():
+    print("No. Of unique values in ",i,"is",df[i].nunique(),".")
+```
+
+```{python}
+# Distribution of the numerical columns
+
+numerical_col=df.select_dtypes("number").columns
+
+plt.figure(figsize=(15,10))
+for i ,col in  enumerate(numerical_col):
+    plt.subplot(3,4,i+1)
+    sns.histplot(df[col],kde=True,bins=30)
+    plt.title(col)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+# Outliers Detection with Boxplots
+plt.figure(figsize=(15,10))
+for i ,col in enumerate(numerical_col):
+    plt.subplot(3,4,i+1)
+    sns.boxplot(df[col])
+    plt.title(col)
+plt.tight_layout()
+plt.show()
+```
+
+```{python}
+# Correlation Heatmap
+plt.figure(figsize=(12,8))
+correlation_matrix=df[numerical_col].corr()
+sns.heatmap(correlation_matrix,annot=True,fmt='.2f',cmap='coolwarm',linewidth=0.5)
+plt.title("Correaltion Heatmap")
+plt.show()
+```
+
+# **3. Detailed Insights through Exploratory Data Analysis**
+
+## **💰 1. Sales & Revenue Trends**
+
+### **1.1) How does total revenue vary across months of the year?** 
+
+```{python}
+def format_dollars(x, pos):
+    """Converts to $1.1M or $100K format"""
+    return f'${x/1e6:.1f}M' if x >= 1e6 else f'${x/1e3:.0f}K'
+```
+
+```{python}
+from matplotlib.ticker import FuncFormatter
+
+# Sample data
+df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
+df['Month'] = df['InvoiceDate'].dt.month_name()
+df['Quarter'] = 'Q' + df['InvoiceDate'].dt.quarter.astype(str)
+
+
+monthly_revenue=df.groupby('Month')['Total_Revenue'].sum().sort_values()
+quarterly_revenue=df.groupby('Quarter')['Total_Revenue'].sum()
+
+fig,(ax1,ax2)=plt.subplots(2,1,figsize=(15,10))
+# Monthly 
+ax1.bar(monthly_revenue.index ,monthly_revenue, color='teal',alpha=0.8)
+ax1.set_title('Monthly Revenue',pad=20)
+ax1.set_ylabel('Total Revenue ($)')
+ax1.yaxis.set_major_formatter(FuncFormatter(format_dollars))
+plt.sca(ax1)
+plt.xticks(rotation=45, ha='right')
+
+# Quarterly (line)
+ax2.plot(quarterly_revenue.index,quarterly_revenue, color='brown',marker='o', markersize=8, linewidth=2.5)
+ax2.set_title('Quarterly Revenue',pad=20)
+ax2.set_ylabel('Total Revenue ($)in millions')
+ax2.yaxis.set_major_formatter(FuncFormatter(format_dollars))
+ax2.grid(True, linestyle=':', alpha=0.4)
+
+plt.tight_layout()
+ax1.grid(False)
+ax2.grid(False)
+plt.show()
+```
+
+#### Insights:
+- The monthly revenue graph shows a steady increase from February to November 2025, with the lowest revenue around $200K in February and the highest at approximately $600K in November.
+- Quarterly revenue has grown consistently from Q1 to Q4 2025, starting at around $500K in Q1 and reaching approximately $1.4M in Q4.
+- Both graphs indicate a positive revenue trend over the year, with a noticeable acceleration in the second half of 2025.
+- The monthly data highlights November as a peak month, while the quarterly data emphasizes Q4 as the strongest quarter.
+
+### **1.2) Which months have the highest and lowest Average Order Value?**
+
+```{python}
+from calendar import month
+from re import M
+
+
+print("Figure 2: Average Order Value (AOV) by Month")
+# group by InvoiceNo  to get Revenue per order
+orders=df.groupby('InvoiceNo').agg({
+    'Total_Revenue':'sum',
+    'Month':'first'
+}).reset_index()
+
+# Calculate the AOV by Month
+monthly_aov=orders.groupby('Month')['Total_Revenue'].mean().reset_index()
+monthly_aov.columns = ['Month', 'AOV']
+
+# Sort by AOV (descending)
+month_order = ['January', 'February', 'March', 'April', 'May', 'June','July', 'August', 'September', 'October', 'November', 'December']
+monthly_aov_sorted = monthly_aov.sort_values('AOV', ascending=False)
+monthly_aov_sorted['Month'] = pd.Categorical(monthly_aov_sorted['Month'], categories=month_order, ordered=True)
+monthly_aov_sorted = monthly_aov_sorted.sort_values('Month')
+
+
+# AOV by month plot
+plt.figure(figsize=(12, 6))
+plt.bar(monthly_aov_sorted['Month'], monthly_aov_sorted['AOV'], color='skyblue')
+plt.title('Average Order Value by Month', fontsize=14)
+plt.xlabel('Month', fontsize=12)
+plt.ylabel('AOV ($)', fontsize=12)
+plt.xticks(rotation=45)
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.show()
+
+# Top 3 months with highest AOV
+highest_aov = monthly_aov_sorted.sort_values('AOV', ascending=False).head(3)
+print("The Top 3 Highest Average order Value within the Months:\n",highest_aov)
+
+# Bottom 3 months with lowest AOV
+lowest_aov = monthly_aov_sorted.sort_values('AOV', ascending=True).head(3)
+print("\n The Bottom 3 Lowest Average Order Value within the Months:\n",lowest_aov)
+
+```
+
+#### Insights:
+- The Average Order Value (AOV) fluctuates throughout the year 2025, with values generally ranging between 150 and 250.
+- The highest AOV is observed in September and October, peaking at around 250.
+- The lowest AOV occurs in June and July, dropping to approximately 150.
+- Overall, there is no consistent upward or downward trend, with peaks and troughs indicating seasonal or other influencing factors.
+
+### **1.3) How does the average price per item change across time (monthly or quarterly)?**
+
+```{python}
+def format_dollars(x, pos):
+    """Converts values to $1.1K or $1.1M format."""
+    if x >= 1e6:
+        return f'${x/1e6:.1f}M'
+    elif x >= 1e3:
+        return f'${x/1e3:.0f}K'
+    else:
+        return f'${x:.2f}'
+```
+
+```{python}
+print("Figure 3: Monthly and Quarterly Average Price per Item")
+
+# Monthly Average Price Per Item
+monthly_avg_unitprice=df.groupby('Month')['UnitPrice'].mean().sort_values()
+
+# Quaterly Average Price per Item
+quarterly_avg_unitprice = df.groupby('Quarter')['UnitPrice'].mean().sort_index()
+
+
+# Create subplots
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 10))
+
+# Monthly average price plot
+monthly_avg_unitprice.plot(kind='line',marker='o', color='teal', ax=ax1, linewidth=2)
+ax1.set_title('Monthly Average Price per Item', fontsize=14, pad=15)
+ax1.set_ylabel('Price', fontsize=12)
+ax1.yaxis.set_major_formatter(FuncFormatter(format_dollars))
+ax1.grid(axis='y', linestyle='--', alpha=0.6)
+plt.sca(ax1)
+plt.xticks(rotation=45, ha='right')
+
+
+
+# Quarterly Average price plot
+quarterly_avg_unitprice.plot(kind='bar', color='skyblue', alpha=0.8, ax=ax2)
+ax2.set_title('Quarterly Average Price per Item', fontsize=14, pad=15)
+ax2.set_xlabel('Quarter')
+ax2.set_ylabel('Price', fontsize=12)
+ax2.yaxis.set_major_formatter(FuncFormatter(format_dollars))
+ax2.grid(axis='y', linestyle=':', alpha=0.6)
+plt.sca(ax2)
+plt.xticks(rotation=45, ha='left')
+
+
+
+plt.tight_layout()
+ax1.grid(True)
+plt.show()
+```
+
+#### Insights:
+- The monthly average price per item shows a steady increase from July 2025 to February 2026, starting at around $12.00 and rising to approximately $13.25.
+- The quarterly average price per item remains relatively stable across Q1 to Q4 2025, hovering around $12.00 to $12.50.
+- The monthly data indicates a noticeable upward trend, particularly from October 2025 onwards.
+
+## **🧍‍♂️2. Customer Behavior Analysis**
+
+###  **2.1) What is the distribution of the number of items purchased per invoice (Items_Per_Invoice)?**
+
+```{python}
+print("Figure 4: Distribution of Items Per Invoice")
+# plot the Item_Per_Invoice 
+plt.figure(figsize=(12,6))
+sns.histplot(df['Items_Per_Invoice'],bins=20,kde=True,color='#4e79a7')
+plt.title('Distribution of Item Per Invoice',fontsize=14)
+plt.xlabel('Number of Items',fontsize=12)
+plt.ylabel('Frequency (Count Of Invoices) ',fontsize=12)
+plt.grid(axis='y')
+plt.show()
+
+# Segment by Customer Behaviour
+# Top 10% of invoices(heavy buyers)
+top_10_invoices=df[df['Items_Per_Invoice'] >= df['Items_Per_Invoice'].quantile(0.9)]
+
+# Bottom 50% of Invoices (Light buyer)
+bottom_50_invoices=df[df['Items_Per_Invoice'] <= df['Items_Per_Invoice'].quantile(0.5)]
+
+print(f"Top 10 % Invoice: Avg {top_10_invoices['Items_Per_Invoice'].mean():.1f} items")
+
+print(f"Bottom 50 % Invoices: Avg {bottom_50_invoices['Items_Per_Invoice'].mean():.1f} items")
+```
+
+**Insights:**
+- The top 10% of invoices (the biggest 10% based on items purchased) had an average of 888.8 items per invoice.
+- The bottom 50% of invoices (the smallest half) had an average of 108.8 items per invoice.
+- There’s a huge gap between the largest and smallest orders. 
+Just the top 10% of purchases are more than 8 times larger (on average) than half of all purchases. This indicates that a few large invoices are driving a significant portion of total sales, which is typical in many retail or B2B scenarios.
+
+### **2.2) How does customer behavior vary between weekdays and weekends?**
+
+#### **2.2.a) What is the effect of  Averag Order Value in the  Weekends and  Weekdays?**
+
+```{python}
+print("Figure 5: Average Order Value (AOV) by Weekend vs Weekday")
+
+# Ensure 'IsWeekend' and 'Total_Revenue' columns exist and are correct
+df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
+df['IsWeekend'] = df['InvoiceDate'].dt.dayofweek >= 5  # Saturday=5, Sunday=6
+df['Total_Revenue'] = df['Quantity'] * df['UnitPrice']
+
+# Calculate AOV per invoice
+invoice_aov = df.groupby(['InvoiceNo', 'IsWeekend']).agg({
+    'Total_Revenue': 'sum'
+}).reset_index()
+
+# Aggregate AOV by weekend/weekday
+aov_by_daytype = invoice_aov.groupby('IsWeekend')['Total_Revenue'].mean().reset_index()
+aov_by_daytype['Day_Type'] = aov_by_daytype['IsWeekend'].map({True: 'Weekend', False: 'Weekday'})
+
+# Plot
+plt.figure(figsize=(10,6))
+sns.barplot(data=aov_by_daytype, x='Day_Type', y='Total_Revenue', palette='Set2')
+plt.title('Average Order Value (AOV): Weekend vs Weekday')
+plt.ylabel('Average Order Value ($)')
+plt.xlabel('Day Type')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.show()
+
+print(aov_by_daytype[['Day_Type', 'Total_Revenue']].rename(columns={'Total_Revenue': 'AOV'}))
+```
+
+#### Insights:
+- The average order value (AOV) is higher on weekdays, reaching approximately $250.
+- The AOV on weekends is lower, at around $225.
+- There is a noticeable difference of about $25 in AOV between weekdays and weekends.
+
+```{python}
+print("Figure 6: Average Order Value (AOV) by Day of Week")
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+# Ensure proper datetime formatting
+from turtle import position
+
+
+df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
+df['DayOfWeek'] = df['InvoiceDate'].dt.day_name()
+df['IsWeekend'] = df['InvoiceDate'].dt.dayofweek >= 5  # Saturday=5, Sunday=6
+
+# Total Revenue column (if not already present)
+df['Total_Revenue'] = df['Quantity'] * df['UnitPrice']
+
+# Calculate per-day behavior
+day_behavior = df.groupby('DayOfWeek').agg({
+    'InvoiceNo': 'nunique',
+    'CustomerID': 'nunique',
+    'Total_Revenue': 'sum'
+}).reset_index()
+
+# Add AOV (Average Order Value) and it should be greater than 0
+day_behavior['AOV'] = day_behavior['Total_Revenue'] / day_behavior['InvoiceNo']
+day_behavior= day_behavior[day_behavior['AOV'] > 0]
+
+
+
+# Map day type
+day_behavior['Day_Type'] = day_behavior['DayOfWeek'].map({
+    'Monday': 'Weekday', 'Tuesday': 'Weekday', 'Wednesday': 'Weekday',
+    'Thursday': 'Weekday', 'Friday': 'Weekday',
+    'Saturday': 'Weekend', 'Sunday': 'Weekend'
+})
+
+# Ensure correct order on x-axis
+day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+day_behavior['DayOfWeek'] = pd.Categorical(day_behavior['DayOfWeek'], categories=day_order, ordered=True)
+
+# ploting the figure
+plt.figure(figsize=(12,6))
+plot = sns.barplot(data=day_behavior, x='AOV', y='DayOfWeek', palette='Set2',orient='h')
+
+# Add value labels on bars
+for container in plot.containers:
+    plot.bar_label(container, fmt='%.2f', label_type='edge', padding=3, fontsize=10, color='black')
+
+
+plt.title("📊 Distribution of Average Order Value (AOV) by Day Of Week")
+plt.xlabel("Average Order Value (AOV)")
+plt.ylabel("Day of a Week")
+plt.grid(False)
+plt.tight_layout()
+plt.legend()
+plt.show()
+```
+
+#### Insgihts:
+- The highest Average Order Value (AOV) is on Monday at $270.02, while the lowest is on Sunday at $240.20.
+- AOV tends to be higher during the early part of the week (Monday to Thursday), ranging from $248.06 to $270.02, with a slight decline towards the weekend.
+- Friday and Saturday show moderate AOVs at $254.74 and $258.56, respectively, before dropping on Sunday.
+
+#### **2.2.b) How does the Order Volume varries within each hour Weeknd and Weekdays?**
+
+```{python}
+print("Figure 7: Invoice Count by Hour - Weekend vs Weekday")
+
+# Ensure datetime and extract necessary time info
+df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
+df['InvoiceHour'] = df['InvoiceDate'].dt.hour
+df['IsWeekend'] = df['InvoiceDate'].dt.dayofweek >= 5  # Sat & Sun
+
+# Group by hour and weekend flag
+hourly_orders = df.groupby(['InvoiceHour', 'IsWeekend'])['InvoiceNo'].nunique().reset_index()
+
+# Rename for clarity
+hourly_orders.columns = ['Hour', 'IsWeekend', 'InvoiceCount']
+hourly_orders['Day_Type'] = hourly_orders['IsWeekend'].map({True: 'Weekend', False: 'Weekday'})
+
+# Plot
+plt.figure(figsize=(12,6))
+sns.lineplot(data=hourly_orders, x='Hour', y='InvoiceCount', hue='Day_Type', marker='o')
+
+plt.title('Invoice Count by Hour - Weekend vs Weekday')
+plt.xlabel('Hour of Day')
+plt.ylabel('Number of Invoices')
+plt.xticks(range(0, 24))
+plt.grid(True)
+plt.legend(title='Day Type')
+plt.tight_layout()
+plt.show()
+```
+
+#### Insights:
+- Invoice counts on weekdays peak between 9 AM and 12 PM, reaching around 2500, with a significant drop after 3 PM.
+- Weekend invoice counts are lower, peaking around 10 AM to 1 PM at approximately 500, and remain relatively stable with a gradual decline throughout the day.
+- Both weekday and weekend invoice counts are minimal from midnight to 6 AM, with a noticeable increase starting around 6 AM.
+
+### **2.3) Are there certain months or hours when customers are more likely to make purchases?**
+
+```{python}
+print("Figure 8: Purchases by Day of Week and Hour of Day")
+# analyse by the day of the week
+fig, axes = plt.subplots(1, 2, figsize=(16, 6))  # Increase width and height
+
+df['InvoiceDate']=pd.to_datetime(df['InvoiceDate'])
+# extract the month name from dayofwee
+df['DayOfWeek']=df['InvoiceDate'].dt.month_name()
+
+# summarizing by day
+day_summary = df.groupby('DayOfWeek')['InvoiceNo'].nunique()
+
+# Plot 1: Barplot of purchases by day of week
+axes[0].bar(day_summary.index,day_summary, color='skyblue',)
+axes[0].set_title('Number of Purchases by Month')
+axes[0].set_xlabel('DayOfWeek')
+axes[0].set_ylabel('Frequency Count')
+axes[0].set_xticklabels((df['DayOfWeek']), rotation=45)
+
+# analyse by the hour of a day
+hour_summary = df.groupby('InvoiceHour')['InvoiceNo'].nunique()
+
+# Plot 2: Line plot of purchases by hour
+axes[1].plot(hour_summary.index, hour_summary, marker='o')
+axes[1].set_title('Number of Purchases by Hour of Day')
+axes[1].set_xlabel('InvoiceHour')
+axes[1].set_ylabel('Number of orders')
+
+
+plt.tight_layout()
+plt.show()
+```
+
+#### Insights:
+- The number of purchases by day of the week shows significant variation, with peaks around September and November at approximately 2500, while other months like April and June have lower counts around 1000-1500.
+- The number of purchases by hour of day peaks between 10 AM and 2 PM, reaching around 2500, with a sharp decline after 2 PM to near zero by 6 PM.
+- Purchase activity is highest during midday hours and certain months, indicating potential seasonal and time-based purchasing trends.
+
+## 📦 **3. Product Performance Analysis**
+
+### **3.1) Which products (by Product or StockCode) generate the most revenue and highest volume?**
+
+```{python}
+print("Figure 9: Top 5 Products by Revenue and Quantity")
+# Group by StockCode and calculate total revenue
+product_wise_revenue = df.groupby('StockCode')['Total_Revenue'].sum().reset_index()
+
+# Sort and pick top 5 product based on revenue
+top_5_stock_df = product_wise_revenue.sort_values(by='Total_Revenue', ascending=False).head(5)
+top_5_stock_series = top_5_stock_df.set_index('StockCode')['Total_Revenue']
+total_revenue = product_wise_revenue['Total_Revenue'].sum()
+
+
+# Group by Product ["Description"] and calculate Total Quantity
+prod_wise_qty=df.groupby('Description')['Total_Quantity'].sum().reset_index()
+
+# sort and pick top 5 products based on quantity
+top_5_prod=prod_wise_qty.sort_values(by='Total_Quantity',ascending=False).head(5)
+top_5_prod_series=top_5_prod.set_index('Description')['Total_Quantity']
+total_qty=top_5_prod['Total_Quantity'].sum()
+
+# Create subplots
+fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+
+# --- Plot 1: Horizontal bar chart for top 5 products ---
+ax[0].barh(top_5_stock_series.index, top_5_stock_series.values, color='lightblue')
+ax[0].set_title('Top 5 Stockcode based on Revenue')
+ax[0].set_xlabel('Total_Revenue')
+ax[0].set_ylabel('StockCode')
+ax[0].invert_yaxis()
+ax[0].grid(axis='x')
+
+# --- Plot 2: Pie chart for Total quantity share ---
+pct_contribution=(top_5_prod_series/total_qty) * 100
+ax[1].pie(
+    x=pct_contribution,
+    labels=top_5_prod_series.index,
+    autopct='%1.2f%%',
+    explode=[0.1, 0, 0, 0, 0],
+    shadow=True
+)
+ax[1].set_title('Top 5 Product contribution based on Total_Quantity')
+
+# Final layout
+plt.tight_layout()
+plt.show()
+
+```
+
+#### Insights:
+- The top 5 products by revenue are StockCodes 47566, 85123A, 85099B, 23298, and 84879, with 47566 generating the highest revenue, exceeding 30,000.
+- The top 5 products by quantity contribution to total quantity are "pack_of_72_retrospot_cake_cases" (24.42%), "assorted_colour_bird_ornament" (22.25%), "jumbo_bag_red_retrospot" (19.80%), "lunch_bag_red_retrospot" (17.58%), and "white_hanging_heart_tlight_holder" (15.94%).
+- The revenue and quantity contributions highlight a diverse product performance, with "pack_of_72_retrospot_cake_cases" leading in quantity and 47566 leading in revenue.
+
+### **3.2) What is the distribution of UnitPrice across different products? Are there any extremely low or high values?**
+
+```{python}
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+print("Figure 10: Distribution of Unit Price")
+
+# Histogram for typical price range
+plt.figure(figsize=(12, 6))
+sns.histplot(df[df['UnitPrice'] <= 10]['UnitPrice'], bins=50, kde=True, color='#1f77b4')
+plt.title('Distribution of UnitPrice (≤ $10)', fontsize=14)
+plt.xlabel('Unit Price ($)', fontsize=12)
+plt.ylabel('Product Count', fontsize=12)
+plt.grid(alpha=0.3)
+plt.xlim(0, 10) 
+plt.grid(axis='x')
+plt.show()
+
+# price summary statistics
+price_stats = df['UnitPrice'].describe(percentiles=[0.01, 0.25, 0.5, 0.75, 0.99])
+print(f"The statistics of UnitePrie Based on different products:\n",price_stats,end='\n')
+
+# Low Value Products having  UnitPrice Less than $ 0.5 
+low_price = df[df['UnitPrice'] < 0.5]  
+print(f"\nThe Total Count of products having products priced < $0.50 : {len(low_price)}\n")
+print("The List of Products having UnitPrice (< $0.50) are :\n",low_price[['StockCode', 'Description', 'UnitPrice']].sample(5),end='\n')
+
+# Top 1% of products by Unit Price
+high_price = df[df['UnitPrice'] > df['UnitPrice'].quantile(0.99)]
+print(f"\nTop 1% products having Unitprice (> ${high_price['UnitPrice'].min():.2f}) are : ")
+print(high_price[['StockCode', 'Description', 'UnitPrice']]
+      .sort_values('UnitPrice', ascending=False)
+      .drop_duplicates('StockCode').head(5))
+```
+
+## **🌐 4. Country-Level Insights:**
+
+### **4.1) Which countries contribute most to the Total Revenue of Myntra Gift Business?**
+
+```{python}
+print("Figure 11: Top 5 Countries by Total Revenue")
+
+import matplotlib.ticker as ticker
+
+
+# Custom dollar formatter
+def format_dollars(x, pos):
+    """Converts values to $1.1K or $1.1M format."""
+    if x >= 1e6:
+        return f'${x/1e6:.1f}M'
+    elif x >= 1e3:
+        return f'${x/1e3:.0f}K'
+    else:
+        return f'${x:.2f}'
+
+# group by top 5 countries based On 'Total_Revenue'
+top_5_countries = df.groupby('Country')['Total_Revenue'].sum().sort_values(ascending=False).head(5)
+
+# Plot horizontal bar chart
+plt.figure(figsize=(10, 6))
+ax=top_5_countries.plot(kind='barh',color='grey', edgecolor='black')
+# Step 3: Apply the custom formatter to x-axis
+ax.xaxis.set_major_formatter(ticker.FuncFormatter(format_dollars))
+plt.title('🌍 Top 5 Countries by Total Revenue', fontsize=14)
+plt.xlabel('Total Revenue', fontsize=12)
+plt.ylabel('Country', fontsize=12)
+plt.grid(axis='x', linestyle='--', alpha=0.7)
+plt.gca().invert_yaxis()
+plt.tight_layout()
+plt.show()
+
+# Print top countries with formatted revenue
+print('📊 The top 5 countries based on Total Revenue:')
+for country, revenue in top_5_countries.items():
+    print(f'{country:<20} : ${revenue:,.2f}')
+```
+
+#### Insights:
+- The United Kingdom dominates total revenue among the top 5 countries, contributing $3,655,815.35, far exceeding the others.
+- Germany, France, and EIRE follow with significantly lower revenues at $137,909.44, $121,911.53, and $105,895.87 respectively, indicating a steep drop-off after the UK.
+- Switzerland has the lowest revenue at $29,790.46, highlighting a vast disparity in market performance across these countries.
+
+### **4.2) How does pricing differ between countries based on  average UnitPrice per country?**
+
+```{python}
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+print("Figure 12: Unit Price Distribution by Country")
+import plotly.express as px
+import cufflinks as cf
+cf.go_offline()
+
+# Summary of country based on the columns ---> "UnitPrice","Total_Revenue","Quantity"
+country_stats=df.groupby('Country').agg({
+    'UnitPrice':['mean','median','count'],
+    'Total_Revenue': 'sum',
+    'Quantity' : 'sum'
+}).sort_values(('Total_Revenue','sum'),ascending=False)
+
+
+
+# Rename the Aggregate column
+country_stats.columns = ['Avg_Price', 'Median_Price', 'Order_Count', 'Total_Revenue', 'Total_Items']
+
+# Derived new column such as - "Revenue_per_order" and "Items_per_order"
+country_stats['Revenue_per_Order'] = country_stats['Total_Revenue'] / country_stats['Order_Count']
+country_stats['Items_per_Order'] = country_stats['Total_Items'] / country_stats['Order_Count']
+
+
+plot_data = df[df['Country'].isin(country_stats.head(10).index) & (df['UnitPrice'] <= 10)]
+
+plt.figure(figsize=(12,10))
+# Create interactive boxplot
+fig = px.box(
+    plot_data,
+    x='Country',
+    y='UnitPrice',
+    color='Country',
+    color_discrete_sequence=px.colors.sequential.Viridis,
+    title='Unit Price Distribution by Country ',
+    labels={'UnitPrice': 'Unit Price ($)', 'Country': ''},
+    hover_data=['Description']  # Show product description on hover
+)
+
+fig.show()
+
+# 
+print(f'The Overall Summary of Top 10  Countries:')
+print(country_stats.head(10).reset_index().to_string(index=False))
+
+```
+
+#### Insights:
+- The unit price distribution varies across countries, with Norway and Belgium showing the highest median unit prices around 4-6 USD, while Switzerland and EIRE have the lowest, around 2-4 USD.
+- The United Kingdom, Spain, France, Netherlands, Germany, and Portugal exhibit a wide range of unit prices, with medians generally between 2-4 USD and some outliers reaching up to 6 USD.
+- The data indicates significant variability in unit prices, with Norway and Belgium having the broadest price ranges and Switzerland the most consistent pricing.
+
+### 4.3) **What is the Percentage Contribution of Top 5 Countries by Total Revenue?**
+
+```{python}
+print("Figure 13: Top 5 Countries by % Contribution to Total Revenue")
+
+# Step 1: Country-wise revenue
+country_wise_revenue = df.groupby('Country')['Total_Revenue'].sum().reset_index()
+
+# Step 2: Total revenue for calculating %
+total_revenue = country_wise_revenue['Total_Revenue'].sum()
+
+
+# Step 3: Top 10 countries by revenue
+top_10 = country_wise_revenue.sort_values('Total_Revenue', ascending=False).head(5)
+
+# Step 4: Add percentage contribution column
+top_10['Percentage'] = (top_10['Total_Revenue'] / total_revenue) * 100
+# Step 5: Plot
+plt.figure(figsize=(15, 6))
+explode = [0.1] * len(top_10)  # Ensure explode matches number of countries
+plt.pie(top_10['Percentage'], labels=top_10['Country'], autopct='%1.1f%%', explode=explode, startangle=140, colors=sns.color_palette("pastel", len(top_10)))
+plt.title('🌍 Top 10 Countries by % Contribution to Total Revenue')
+plt.tight_layout()
+plt.show()
+```
+
+#### Insights:
+- The United Kingdom dominates the total revenue contribution with an overwhelming 90.2%.
+- Germany is the second highest contributor, accounting for 3.4% of the total revenue.
+- France follows with a 3.0% share of the total revenue.
+- EIRE contributes a minimal 0.7% to the total revenue.
+- Switzerland has the smallest share among the top five, at 0.2%.
+
+## **⏰ 5. Time & Purchase Patterns**
+
+### **5.1) What are the peak invoice hours during a typical day?**
+
+```{python}
+print("Figure 14: Invoices per Hour of Day")
+
+# Count Orders by Hour and the sort the column based on InvoiceCount
+invoice_by_hour=df.groupby('InvoiceHour')['InvoiceNo'].nunique().reset_index()
+invoice_by_hour.columns = ['Hour', 'InvoiceCount']
+invoice_by_hour.sort_values(by='InvoiceCount',ascending=False).head(5)
+
+
+# plot the result
+plt.figure(figsize=(12,6))
+sns.barplot(x='Hour', y='InvoiceCount', data=invoice_by_hour, palette='viridis')
+plt.title('Invoices per Hour of Day')
+plt.xlabel('Hour of Day ')
+plt.ylabel('Number of Invoices')
+plt.xticks(range(0, 24))
+plt.tight_layout()
+plt.show()
+
+print(f'The pick hours of a particular day having the maximum order count are:\n',invoice_by_hour.sort_values(by='InvoiceCount',ascending=False).head(5))
+```
+
+#### Insights:
+- The number of invoices per hour peaks between 6 AM and 12 PM, with the highest count at 6 AM (approximately 2840 invoices), followed by a gradual decline throughout the day, dropping significantly after 2 PM.
+- The busiest hours based on additional data are 6 AM (2840 invoices), 7 AM (2432 invoices), and 8 AM (2110 invoices), indicating a strong morning surge in activity.
+- Invoice counts are minimal after 6 PM, with less than 500 invoices per hour, suggesting most activity is concentrated in the early part of the day.
+
+### **5.2) Which day of the week has the highest revenue and quantity sold?**
+
+```{python}
+print("Figure 15: Total Revenue and Quantity by Day of Week")
+
+# converting thing the InvoiceDate into Date column
+df['InvoiceDate']=pd.to_datetime(df['InvoiceDate'])
+
+# extracting the day name 
+df['DayOfWeek']=df['InvoiceDate'].dt.day_name()
+
+# group by "DayOfWeek"  based on Revenue Na Quantity
+day_summary = df.groupby('DayOfWeek').agg({
+    'Total_Revenue': 'sum',
+    'Quantity': 'sum'
+}).reset_index()
+
+# Defined the day order and converting it into an categorical order
+day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+day_summary['DayOfWeek'] = pd.Categorical(day_summary['DayOfWeek'], categories=day_order, ordered=True)
+day_summary = day_summary.sort_values('DayOfWeek')
+
+# Create weekend flag
+day_summary['IsWeekend'] = day_summary['DayOfWeek'].isin(['Saturday', 'Sunday'])
+
+# applying a formatter
+def format_with_commas(x, pos):
+    return f'${int(x):,}'
+
+# applying funcformater
+formatter = FuncFormatter(format_with_commas)
+
+fig, ax = plt.subplots(1, 2, figsize=(15, 6))
+
+# Revenue
+ax[0].bar(day_summary['DayOfWeek'], day_summary['Total_Revenue'], color='seagreen')
+ax[0].set_title('Total Revenue by Day of Week')
+ax[0].set_ylabel('Revenue')
+ax[0].yaxis.set_major_formatter(formatter)
+ax[0].tick_params(axis='x', rotation=45)
+
+# Quantity
+ax[1].bar(day_summary['DayOfWeek'], day_summary['Quantity'], color='dodgerblue')
+ax[1].set_title('Total Quantity Sold by Day of Week')
+ax[1].set_ylabel('Quantity')
+ax[1].yaxis.set_major_formatter(formatter)
+ax[1].tick_params(axis='x', rotation=45)
+
+plt.tight_layout()
+plt.show()
+```
+
+#### Insights:
+- Total revenue peaks on Wednesday at over $800,000, with other days like Tuesday and Thursday also showing strong performance above $600,000, while Sunday has the lowest at around $400,000.
+- Total quantity sold is highest on Thursday and Friday, exceeding $500,000, with a noticeable dip on Sunday at around $300,000.
+- Both revenue and quantity trends indicate midweek days (Wednesday to Friday) as the most active, with a decline towards the weekend.
+
+### 5.3) How does the Average Order Value changes  within each Part Of Days
+
+```{python}
+print("Figure 16: Average Order Value (AOV) by Part of Day")
+
+# Ensure datetime format
+df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
+df['InvoiceHour'] = df['InvoiceDate'].dt.hour
+df['DayOfWeek'] = df['InvoiceDate'].dt.day_name()
+df['Day_type'] = df['IsWeekend'].map({True: 'Weekend', False: 'Weekday'})
+
+# Part of Day Mapping
+def get_part_of_day(hour):
+    if 6 <= hour < 12:
+        return 'Morning'
+    elif 12 <= hour < 17:
+        return 'Afternoon'
+    elif 17 <= hour < 21:
+        return 'Evening'
+    else:
+        return 'Night'
+
+df['PartOfDay'] = df['InvoiceHour'].apply(get_part_of_day)
+
+# Aggregate purchasing patterns for each part of the day
+# Remove the blank data from the DataFrame
+df = df.dropna(subset=['PartOfDay', 'Day_type', 'InvoiceNo', 'Quantity', 'Total_Revenue'])
+
+part_of_day_summary = df.groupby(['Day_type', 'PartOfDay']).agg({
+    'InvoiceNo': 'nunique',
+    'Quantity': 'sum',
+    'Total_Revenue': 'sum'
+}).reset_index()
+
+part_of_day_summary.columns = ['Day_type', 'PartOfDay', 'Order_Volume', 'Total Quantity', 'Total_Revenue']
+part_of_day_summary['AOV'] = part_of_day_summary['Total_Revenue'] / part_of_day_summary['Order_Volume']
+
+# Remove rows with zero or negative AOV
+part_of_day_summary = part_of_day_summary[part_of_day_summary['AOV'] > 0]
+
+# Sort PartOfDay order (excluding 'Night' if desired, otherwise include all valid parts)
+part_order = ['Morning', 'Afternoon', 'Evening', 'Night']
+part_of_day_summary['PartOfDay'] = pd.Categorical(part_of_day_summary['PartOfDay'], categories=part_order, ordered=True)
+part_of_day_summary = part_of_day_summary.sort_values(['Day_type', 'PartOfDay'])
+
+# --- Plotting ---
+plt.figure(figsize=(12, 6))
+sns.barplot(data=part_of_day_summary, x='PartOfDay', y='AOV', hue='Day_type')
+plt.title("Average Order Value by Part of Day (Weekdays vs Weekends)")
+plt.ylabel("Average Order Value (AOV)")
+plt.xlabel("Part of Day")
+plt.grid(True, axis='y')
+plt.tight_layout()
+plt.show()
+```
+
+## **6.) RFM Analysis:**
+
+```{python}
+print("Figure 17: RFM Analysis - Recency, Frequency, Monetary")
+
+# customer last transcation date
+df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
+
+# creating a reference_date
+reference_date=df['InvoiceDate'].max()
+
+# group by CustomerID to calculate new columns for Recency as Days from First purchase,Frequency As count(Invoice),Monetary as sum(total_revenue)
+rfm = df.groupby('CustomerID').agg({
+    'InvoiceDate': lambda x: (reference_date - x.max()).days,
+    'InvoiceNo': 'count',
+    'Total_Revenue': 'sum'
+}).rename(columns={
+    'InvoiceDate': 'Recency',
+    'InvoiceNo': 'Frequency',
+    'Total_Revenue': 'Monetary'
+}).reset_index()
+```
+
+### **6.1) Top 5 customers Interms of Receny,Frequency,Monetary**
+
+```{python}
+rfm.head()
+```
+
+### **6.2) Assigning RFM Scores**
+
+```{python}
+# We rank customers into segments based on percentiles (1–4 scale) where 1=(worst),4=(best).
+
+# creating quantiles for each RFM  segments
+rfm['R_segment']=pd.qcut(rfm['Recency'],q=4,labels=[4,3,2,1])  # Lower recency = better score
+rfm['F_segment']=pd.qcut(rfm['Frequency'],q=4,labels=[1,2,3,4])
+rfm['M_segment']=pd.qcut(rfm['Monetary'],q=4,labels=[1,2,3,4])
+
+# calculate the RFM_score = R_Segment + F_Segment + M_Segment
+rfm['RFM_score']=rfm[['R_segment','F_segment','M_segment']].sum(axis=1)
+rfm.head()
+```
+
+### **6.3) Performing Customer Segmentation Based on RFM Score**
+
+```{python}
+# Performing Customer Segementation by defining Cutomer Segments based on RFM scores.
+
+def segment_customer(rfm):
+    score = int(rfm)
+    if score >= 12: return "Best Customers"
+    elif score >= 10: return "Loyal Customers"
+    elif score >= 6: return "Potential Loyalists"
+    elif score >= 3: return "Need Attention"
+    else: return "At Risk"
+
+rfm['Segment']=rfm['RFM_score'].apply(segment_customer)
+rfm.head()
+```
+
+```{python}
+# To check distinct Type of  'RFM_Score'
+rfm['RFM_score'].value_counts()
+```
+
+Insights:
+- Scores 5 (467), 6 (452), and 12 (444) are the top three most frequent RFM values, indicating higher customer engagement or value.
+- Scores 4 (376), 11 (378), and 9 (384) occur the least, suggesting fewer customers fall into these RFM segments.
+- Counts are tightly clustered (376–467), with no extreme outliers, showing a balanced distribution across RFM segments.
+- Scores like 7 (430), 8 (444), and 10 (422) represent moderate frequencies, bridging the gap between high and low occurrences.
+- The counts are relatively close, indicating a fairly even spread across the RFM score.
+
+### **6.4) Visualizing the RFM Scores Segment**
+
+```{python}
+print("The distinct RFM_Score are:\n",rfm['RFM_score'].value_counts(),end='\n\n')
+
+plt.figure(figsize=(12,5))
+sns.countplot(data=rfm,x='Segment',order=rfm['Segment'].value_counts().index,palette='coolwarm')
+plt.title('Customer Segments Based on RFM Analysis')
+plt.xlabel('Customer Segments')
+plt.ylabel('Number of Customers')
+
+# Add data labels to the bars
+for p in plt.gca().patches:
+    plt.gca().annotate(f'{p.get_height()}', (p.get_x() + p.get_width() / 2., p.get_height()),
+                       ha='center', va='center', fontsize=10, color='black', xytext=(0, 5),
+                       textcoords='offset points')
+
+plt.grid(False)
+plt.show()
+```
+
+**Insights:**
+- The segments **Need Attention** and **Loyal Customers** are the largest, each with **800** customers, indicating significant focus areas for retention and engagement strategies.
+- **Best Customers** is the smallest group (441 customers), representing a premium but limited segment requiring prioritized care.
+- **Potential Loyalists** (443 customers) shows room for conversion into loyal or best customers through targeted marketing.
+- The disparity between the largest (800) and smallest (441) segments highlights uneven customer distribution, suggesting tailored approaches for each segment.
+
+## **7.) Customer Segmentation using K-means Clustering**
+
+```{python}
+# Normalization of RFM  Values
+from sklearn.preprocessing import StandardScaler
+scaler=StandardScaler()
+rfm_scaled=scaler.fit_transform(rfm[['Recency','Frequency','Monetary']])
+rfm_scaled
+```
+
+```{python}
+# Converting rfm_scaled to Data frame
+rfm_scaled=pd.DataFrame(rfm_scaled,columns=['Recency','Frequency','Monetary'])
+```
+
+## **7.1) Implementing Elbow Method**
+
+```{python}
+# Finding Optimal K-usingthe Elbow Method
+from sklearn.cluster import KMeans
+# Within-Cluster Sum of Squares
+wcss=[]
+
+for k in range (1,11):
+  kmeans=KMeans(n_clusters=k,init='k-means++',random_state=42)
+  kmeans.fit(rfm_scaled)
+  wcss.append(kmeans.inertia_)
+
+# Plotting the the Elbow Curve
+plt.figure(figsize=(10,6))
+plt.plot(range(1,11),wcss,marker='o',linestyle='--')
+plt.title('Elbow Method for Optimal K Selection')
+plt.xlabel('Number of Clusters (K)')
+plt.ylabel('Within-Cluster Sum of Squares (WCSS)')
+plt.show()# Finding Optimal K-usingthe Elbow Method
+```
+
+- From the Above Figure we can conclude that the Elbow point to be 4 becuase  this is where the rate of decrease in WCSS starts to slow down significantly.
+
+## **7.2) Applying the K-Means Clustering**
+
+```{python}
+# Apply the K-Means Clustering with Optimal elbow point k=4
+kmeans=KMeans(n_clusters=4,random_state=42,n_init=10)
+rfm['Cluster']=kmeans.fit_predict(rfm_scaled)
+
+# Now checking the Cluster Disrtibution
+rfm['Cluster'].value_counts()
+```
+
+## **7.4) Visualizing the Customer Segments**
+
+```{python}
+print("The Cluster Distribution based on the RFM Segmentation:\n",rfm['Cluster'].value_counts(),end='\n\n')
+
+# Visualizing the clusters using a 3D scatter plot
+from mpl_toolkits.mplot3d import Axes3D
+
+fig = plt.figure(figsize=(12, 8))
+ax = fig.add_subplot(111, projection='3d')
+
+# Scatter plot for data points
+scatter = ax.scatter(rfm['Recency'], rfm['Frequency'], rfm['Monetary'], c=rfm['Cluster'], cmap='viridis')
+
+ax.set_xlabel('Recency (Days)')
+ax.set_ylabel('Frequency')
+ax.set_zlabel('Monetary (Spending)')
+ax.set_title('Customer Segmentation (Recency vs Frequency vs Monetary)')
+
+# Adding a colorbar to show the cluster assignments
+plt.colorbar(scatter)
+plt.legend
+plt.show()
+```
+
+## **Cluster Insights**:
+1.  **Cluster 0 (Purple)-Loyal Customers**:
+    *   High monetary spending.
+    *   Low recency (recent purchases).
+    *   These customers are likely to return consistently and make frequent purchases.
+
+2.  **Cluster 1 (Blue) - Potential Customers**:
+    *   Moderate monetary spending.
+    *   Moderate to low recency.
+    *   These customers show potential for becoming loyal but need encouragement (e.g., targeted marketing).
+
+3.  **Cluster 2 (Green) - Lost Customers:**
+    *  Low monetary spending.
+    *  High recency (long time since last purchase).
+    *  These customers may have been
+        active previously but have not engaged recently.
+
+4.   **Cluster 3 (Yellow) - New or Inactive Customer:**
+    *  Very low spending.
+    *  High recency (recent engagement but low spending).
+    *  Potentially new customers who have yet to make a significant purchase.
+
+## **7.5) Evaluate Clustering Performance**
+
+```{python}
+from sklearn.metrics import silhouette_score
+silhouette_avg = silhouette_score(rfm_scaled, rfm["Cluster"])
+print(f"Silhouette Score: {silhouette_avg:.3f}")
+```
+
+- Silhouette Score of 0.591 indicates  that clustering is reasonably good. There is a moderate separation b/w  customers segments which indicates that most of the customers were segmented within the  right cluster while  some little overlap between them may still exist.
+
+## **8.) Statistical Significane Test**
+
+### **8.1) What is the 95% confidence interval for average order value of best-selling vs. least-selling products?**
+
+```{python}
+print("Figure 18: Confidence Interval for Best vs Least-Selling Products (Total Revenue)")
+
+from scipy import stats
+
+# Filter out zero-priced items
+df = df[df['UnitPrice'] > 0]
+
+# Add Total Revenue column if not already there
+df['Total_Revenue'] = df['Quantity'] * df['UnitPrice']
+
+# Product-wise total revenue
+product_rev = df.groupby('StockCode')['Total_Revenue'].sum().reset_index()
+
+# Determine thresholds
+top_thresh = product_rev['Total_Revenue'].quantile(0.75)
+low_thresh = product_rev['Total_Revenue'].quantile(0.25)
+
+# Get stock codes for best and least-selling products for item -level revenue
+top_codes = product_rev.query("Total_Revenue > @top_thresh")['StockCode']
+low_codes = product_rev.query("Total_Revenue < @low_thresh")['StockCode']
+
+# Filter rows for those stock codes
+top_df = df[df['StockCode'].isin(top_codes)]
+low_df = df[df['StockCode'].isin(low_codes)]
+
+# Group by InvoiceNo to get order-level revenue (i.e., AOV)
+top_aov = top_df.groupby('InvoiceNo')['Total_Revenue'].sum()
+low_aov = low_df.groupby('InvoiceNo')['Total_Revenue'].sum()
+
+# Confidence Interval function
+def confidence_interval(data, confidence=0.95):
+    """
+    Returns mean, lower bound, and upper bound of confidence interval.
+    """
+    mean_val = data.mean()
+    std_err = data.std(ddof=1) / np.sqrt(len(data))
+    t_crit = stats.t.ppf((1 + confidence) / 2, df=len(data)-1)
+    margin = t_crit * std_err
+    return mean_val, mean_val - margin, mean_val + margin
+
+# Apply function on Total_Revenue
+top_mean, top_l, top_u = confidence_interval(top_aov)
+low_mean, low_l, low_u = confidence_interval(low_aov)
+
+# Print results
+print(f"✅ Top Products 95% CI: ({top_l:.2f}, {top_u:.2f}), Mean: {top_mean:.2f}")
+print(f"🔻 Low Products 95% CI: ({low_l:.2f}, {low_u:.2f}), Mean: {low_mean:.2f}")
+
+# Plotting
+plt.figure(figsize=(12, 6))
+
+# Best-selling
+sns.histplot(top_aov, kde=True, color='green', bins=30, alpha=0.4, label="Top Products")
+plt.axvline(top_l, color="green", linestyle="--", label=f"Top CI Lower: {top_l:.2f}")
+plt.axvline(top_u, color="green", linestyle="--", label=f"Top CI Upper: {top_u:.2f}")
+plt.axvline(top_mean, color="green", linestyle="-", label=f"Top Mean: {top_mean:.2f}")
+
+# Least-selling
+sns.histplot(low_aov, kde=True, color='red', bins=50, alpha=0.4, label="Low Products")
+plt.axvline(low_l, color="red", linestyle="--", label=f"Low CI Lower: {low_l:.2f}")
+plt.axvline(low_u, color="red", linestyle="--", label=f"Low CI Upper: {low_u:.2f}")
+plt.axvline(low_mean, color="red", linestyle="-", label=f"Low Mean: {low_mean:.2f}")
+
+# Final styling
+plt.title("📊 95% Confidence Interval: Best vs Least-Selling Products (Total Revenue)")
+plt.xlabel("Average Order Revenue per Invoice")
+plt.ylabel("Frequency")
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.tight_layout()
+plt.show()
+```
+
+**📊 Key Insights:**
+- **Top-selling products** average around **₹17,700 (≈$209)** per invoice, with a tight confidence range (₹17,500–₹18,000).
+- **Low-selling products** average just **₹925 (≈$11)** per order, with minimal variation (₹860–₹1,000).
+- The distributions show minimal overlap— **exceptional statistical separation.**
+- High-selling items have a long tail, meaning occasional **very large orders**, while low sellers consistently generate small invoices.
+
+###  **8.2) Is there a significant difference in Average Order Value per Invoice between top-performing and low-performing vendors?**
+
+**Hypothesis:**
+
+**H₀ (Null Hypothesis):** There is no significant difference in the mean of Average Order Value of top-performing and low-performing products.
+
+**H₁ (Alternative Hypothesis):** The mean Average Order Value of top-performing and low-performing products are significantly different .
+
+```{python}
+# calculate AOV per invoice
+top_aov = top_df.groupby('InvoiceNo')['Total_Revenue'].sum()
+low_aov = low_df.groupby('InvoiceNo')['Total_Revenue'].sum()
+
+# Convert to NumPy arrays
+x = top_aov.values
+y = low_aov.values
+
+# applying the t-test
+t_stat, p_val = stats.ttest_ind(x, y, equal_var=False)
+
+print(f"t-statistic = {t_stat:.3f}, p-value = {p_val:.2f}")
+if p_val < 0.05:
+    print("Reject H₀ → Significant difference in mean AOV.")
+else:
+    print("Fail to reject H₀ → No significant mean difference.")
+```
+
+**Insights:**
+- **t-statistic = 120.17**
+--> This extremely high value indicates that the difference in mean AOV between top and low-performing vendors is far larger than the typical variability you'd expect by chance.
+- **p-value ≈ 0.00**
+--> A p-value this low—practically zero—means there's virtually no probability that such a large difference would arise if the null hypothesis (no difference) were true. In standard terms, p < 0.05 definitively **rejects H₀**, confirming a statistically significant difference.
+
+### **8.3) Q2: What is the 95% confidence interval for purchase frequency of high-value vs. low-value customers?**
+
+```{python}
+print("Figure 19: Purchase Frequency Distribution (High vs. Low-Value Customers)")
+
+# group by CustomerID to compute total revenue and purchase frequency 
+customer_stats=df.groupby('CustomerID').agg(
+    Total_Revenue=('Total_Revenue','sum'),
+    Purchase_Frequency=('InvoiceNo', 'nunique')  # Count of unique invoices
+).reset_index()
+
+# Classify customers into high/low value using quantiles (e.g., top 20%)
+high_value_threshold = customer_stats['Total_Revenue'].quantile(0.8)  # 80th percentile
+
+high_value = customer_stats[customer_stats['Total_Revenue'] > high_value_threshold]
+low_value = customer_stats[customer_stats['Total_Revenue'] <= high_value_threshold]
+
+# Calculate the 95% confidence Interval for purchase frequency
+def confidence_interval(data, confidence=0.95):
+    n = len(data)
+    if n < 2:
+        return (np.nan, np.nan)  # Not enough data
+    mean = np.mean(data)
+    std_err = stats.sem(data)  # Standard error of the mean
+    margin = std_err * stats.t.ppf((1 + confidence) / 2, n - 1)
+    return (mean - margin, mean + margin)
+
+ci_high = confidence_interval(high_value['Purchase_Frequency'])
+ci_low = confidence_interval(low_value['Purchase_Frequency'])
+
+
+# Combine high/low value data for plotting
+high_value['Segment'] = 'High-Value (Top 20%)'
+low_value['Segment'] = 'Low-Value (Bottom 80%)'
+combined_data = pd.concat([high_value, low_value])
+
+# Plot histograms with KDE (Kernel Density Estimation)
+plt.figure(figsize=(10, 6))
+sns.histplot(
+    data=combined_data,
+    x='Purchase_Frequency',
+    hue='Segment',
+    element='step',
+    stat='density',
+    common_norm=False,
+    kde=True,
+    bins=100,
+    alpha=0.3,
+    palette={'High-Value (Top 20%)': 'green', 'Low-Value (Bottom 80%)': 'red'}
+)
+
+
+# Add mean lines
+plt.axvline( high_value['Purchase_Frequency'].mean(),color='green',linestyle='--',label=f'High-Value Mean: {high_value["Purchase_Frequency"].mean():.1f}')
+plt.axvline(low_value['Purchase_Frequency'].mean(),color='red',linestyle='--',label=f'Low-Value Mean: {low_value["Purchase_Frequency"].mean():.1f}')
+
+
+# Add confidence intervals (shaded regions)
+plt.axvspan(ci_high[0], ci_high[1],color='green',alpha=0.1,label=f'High-Value 95% CI: [{ci_high[0]:.1f}, {ci_high[1]:.1f}]')
+plt.axvspan(ci_low[0], ci_low[1],color='red',alpha=0.1,label=f'Low-Value 95% CI: [{ci_low[0]:.1f}, {ci_low[1]:.1f}]')
+
+# Customize plot
+plt.title('Purchase Frequency Distribution (High vs. Low-Value Customers)')
+plt.xlabel('Number of Invoices (Purchase Frequency)')
+plt.ylabel('Density')
+plt.legend()
+plt.show()
+
+# Results
+print("High-Value Customers (Top 20% by Revenue):")
+print(f"Sample Size: {len(high_value)}")
+print(f"Mean Purchase Frequency: {high_value['Purchase_Frequency'].mean():.2f}")
+print(f"95% CI: [{ci_high[0]:.2f}, {ci_high[1]:.2f}]\n")
+
+print("Low-Value Customers (Bottom 80% by Revenue):")
+print(f"Sample Size: {len(low_value)}")
+print(f"Mean Purchase Frequency: {low_value['Purchase_Frequency'].mean():.2f}")
+print(f"95% CI: [{ci_low[0]:.2f}, {ci_low[1]:.2f}]")
+```
+
