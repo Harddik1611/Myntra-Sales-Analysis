@@ -174,7 +174,7 @@ The Power BI dashboard provides an interactive interface to explore the Myntra S
 
 ### Dashboard Screenshot
 ### 1️⃣ Overview Dashboard – Sales, Orders & Product Insights
-![Overview Dashboard](image/Overview_Dashboard.png)  
+![Overview Dashboard](image/Overview_dashboard.png)  
 **Figure 1: This dashboard provides a holistic view of total sales (₹339.76K), profit margin (28.15%), quantity growth (+1230%), and total orders. It also highlights top-selling months, top 5 products by sales, and most profitable stock codes.**
 
 -----
