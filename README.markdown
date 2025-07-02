@@ -138,7 +138,7 @@ To run the analysis, follow these steps:
 - **Returns and Profit Margin**: Spain has the highest return rate at 35.3%, while Saudi Arabia has the lowest profit margin at -57.80%.
 
 ### Customer Segmentation
-- **Customer Profit Contribution**: Top 5 customers contribute $66K to $149K in profit.
+- **Customer Profit Contribution**: Top 5 customers contribute $66K to $149K in overall profit.
 
 ## Recommendations
 Based on the analysis, the following strategies can optimize Myntra Gifts Ltd.'s business performance:
